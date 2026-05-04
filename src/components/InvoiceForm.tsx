@@ -4,6 +4,7 @@ import {
   calcSubtotal, calcVat, calcTotal,
   formatCurrency, generateId, generateInvoiceNumber
 } from '../utils/calculations'
+import { LEGAL_MENTIONS_ME, capitalizeDescription } from '../utils/legalMentions'
 
 interface InvoiceFormProps {
   invoice: Invoice | null
@@ -33,7 +34,8 @@ function createEmptyInvoice(existingNumbers: string[]): Invoice {
     client: { ...EMPTY_PARTY },
     items: [EMPTY_ITEM()],
     vatRate: 20,
-    vatEnabled: true,
+    vatEnabled: false,
+    isMicroEntrepreneur: true,
     notes: '',
     currency: 'EUR',
     status: 'draft',
@@ -45,10 +47,12 @@ function createEmptyInvoice(existingNumbers: string[]): Invoice {
 interface PartyFieldsProps {
   label: string
   party: InvoiceParty
+  isEmitter?: boolean
+  isMicroEntrepreneur?: boolean
   onChange: (party: InvoiceParty) => void
 }
 
-function PartyFields({ label, party, onChange }: PartyFieldsProps) {
+function PartyFields({ label, party, isEmitter, isMicroEntrepreneur, onChange }: PartyFieldsProps) {
   const f = (field: keyof InvoiceParty) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...party, [field]: e.target.value })
 
@@ -56,14 +60,50 @@ function PartyFields({ label, party, onChange }: PartyFieldsProps) {
     <div>
       <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">{label}</h3>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Nom / Société" value={party.name} onChange={f('name')} className="col-span-2" />
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-gray-500 mb-1.5">Nom / Société</label>
+          <input
+            type="text"
+            value={party.name}
+            onChange={f('name')}
+            className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
+          {isEmitter && isMicroEntrepreneur && (
+            <p className="text-xs text-blue-500 mt-1.5 flex items-center gap-1">
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                <circle cx="5.5" cy="5.5" r="5" stroke="#3b82f6" strokeWidth="1" />
+                <path d="M5.5 4v3M5.5 8v.5" stroke="#3b82f6" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+              La mention «&nbsp;Micro-entrepreneur&nbsp;» apparaîtra sous votre nom sur la facture
+            </p>
+          )}
+        </div>
         <Field label="Adresse" value={party.address} onChange={f('address')} className="col-span-2" />
         <Field label="Code postal" value={party.postalCode} onChange={f('postalCode')} />
         <Field label="Ville" value={party.city} onChange={f('city')} />
         <Field label="Pays" value={party.country} onChange={f('country')} />
-        <Field label="SIRET" value={party.siret ?? ''} onChange={f('siret')} />
+        {/* SIRET with quick-fill */}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1.5">SIRET</label>
+          <input
+            type="text"
+            value={party.siret ?? ''}
+            onChange={f('siret')}
+            placeholder="123 456 789 00012"
+            className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
+          {isEmitter && party.siret === '' && (
+            <button
+              type="button"
+              onClick={() => onChange({ ...party, siret: 'En cours d\'immatriculation' })}
+              className="mt-1 text-[11px] text-blue-500 hover:text-blue-700 hover:underline"
+            >
+              → En cours d'immatriculation
+            </button>
+          )}
+        </div>
         <Field label="Email" value={party.email} onChange={f('email')} type="email" />
-        <Field label="Téléphone" value={party.phone} onChange={f('phone')} />
+        <Field label="Téléphone" value={party.phone} onChange={f('phone')} className="col-span-2" />
       </div>
     </div>
   )
@@ -95,11 +135,14 @@ function Field({ label, value, onChange, type = 'text', className = '', step }: 
 
 export default function InvoiceForm({ invoice, existingNumbers, onSave, onPreview, onCancel }: InvoiceFormProps) {
   const [form, setForm] = useState<Invoice>(() =>
-    invoice ? { ...invoice } : createEmptyInvoice(existingNumbers)
+    invoice ? { ...invoice, isMicroEntrepreneur: invoice.isMicroEntrepreneur ?? true } : createEmptyInvoice(existingNumbers)
   )
 
   useEffect(() => {
-    setForm(invoice ? { ...invoice } : createEmptyInvoice(existingNumbers))
+    setForm(invoice
+      ? { ...invoice, isMicroEntrepreneur: invoice.isMicroEntrepreneur ?? true }
+      : createEmptyInvoice(existingNumbers)
+    )
   }, [invoice, existingNumbers])
 
   const subtotal = calcSubtotal(form.items)
@@ -113,6 +156,11 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
         item.id === id ? { ...item, [field]: field === 'description' ? value : Number(value) } : item
       ),
     }))
+  }
+
+  function handleDescriptionBlur(id: string, raw: string) {
+    const capitalized = capitalizeDescription(raw)
+    if (capitalized !== raw) updateItem(id, 'description', capitalized)
   }
 
   function addItem() {
@@ -130,9 +178,9 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
 
   return (
     <div className="animate-fade-in flex-1 overflow-y-auto">
-      <div className="max-w-4xl mx-auto px-8 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
           <div className="flex items-center gap-3">
             <button
               onClick={onCancel}
@@ -149,7 +197,7 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
               <p className="text-sm text-gray-400 mt-0.5">{form.number}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => onPreview(form)}
               className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-lg border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-600 transition-all"
@@ -176,10 +224,10 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
         </div>
 
         <div className="space-y-6">
-          {/* Meta: number, dates, currency, status */}
+          {/* Meta */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">Informations générales</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">N° de facture</label>
                 <input
@@ -221,14 +269,30 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
                 </select>
               </div>
             </div>
+
+            {/* Micro-entrepreneur toggle */}
+            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.isMicroEntrepreneur}
+                  onChange={e => setForm(f => ({ ...f, isMicroEntrepreneur: e.target.checked }))}
+                  className="w-4 h-4 rounded accent-blue-600"
+                />
+                <span className="text-sm font-medium text-gray-700">Micro-entrepreneur</span>
+              </label>
+              <span className="text-xs text-gray-400">Affiche le statut sur la facture et applique les mentions légales obligatoires</span>
+            </div>
           </div>
 
           {/* Parties */}
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
               <PartyFields
                 label="Émetteur (vous)"
                 party={form.emitter}
+                isEmitter
+                isMicroEntrepreneur={form.isMicroEntrepreneur}
                 onChange={emitter => setForm(f => ({ ...f, emitter }))}
               />
             </div>
@@ -247,7 +311,6 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
               <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400">Articles & Prestations</h3>
             </div>
             <div className="p-4">
-              {/* Table header */}
               <div className="grid grid-cols-[1fr_90px_110px_110px_36px] gap-2 px-2 mb-2">
                 <span className="text-xs font-medium text-gray-400">Description</span>
                 <span className="text-xs font-medium text-gray-400 text-center">Qté</span>
@@ -262,8 +325,9 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
                     <input
                       type="text"
                       value={item.description}
-                      placeholder={`Article ${idx + 1}`}
+                      placeholder={`ex: Modélisation 3D — article ${idx + 1}`}
                       onChange={e => updateItem(item.id, 'description', e.target.value)}
+                      onBlur={e => handleDescriptionBlur(item.id, e.target.value)}
                       className="text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                     />
                     <input
@@ -314,10 +378,14 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
             {/* Totals */}
             <div className="border-t border-gray-100 px-6 py-5 bg-gray-50">
               <div className="flex flex-col items-end gap-2 max-w-xs ml-auto">
-                <div className="flex justify-between w-full text-sm text-gray-500">
-                  <span>Sous-total HT</span>
-                  <span className="font-medium text-gray-700">{formatCurrency(subtotal, form.currency)}</span>
-                </div>
+                {/* TVA toggle — only show HT line when TVA active */}
+                {form.vatEnabled && (
+                  <div className="flex justify-between w-full text-sm text-gray-500">
+                    <span>Sous-total HT</span>
+                    <span className="font-medium text-gray-700">{formatCurrency(subtotal, form.currency)}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between w-full text-sm text-gray-500 items-center gap-4">
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-1.5 cursor-pointer">
@@ -326,60 +394,83 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
                         checked={form.vatEnabled}
                         onChange={e => {
                           const enabled = e.target.checked
-                          const legalMention = 'TVA non applicable, art. 293 B du CGI'
-                          setForm(f => {
-                            let notes = f.notes
-                            if (!enabled && !notes.includes(legalMention)) {
-                              notes = notes ? `${notes}\n${legalMention}` : legalMention
-                            } else if (enabled) {
-                              notes = notes.replace(`\n${legalMention}`, '').replace(legalMention, '').trim()
-                            }
-                            return { ...f, vatEnabled: enabled, notes }
-                          })
+                          setForm(f => ({ ...f, vatEnabled: enabled }))
                         }}
                         className="w-3.5 h-3.5 rounded accent-blue-600"
                       />
                       <span>TVA</span>
                     </label>
                     {form.vatEnabled && (
-                      <input
-                        type="number"
-                        value={form.vatRate}
-                        min="0"
-                        max="100"
-                        step="0.5"
-                        onChange={e => setForm(f => ({ ...f, vatRate: Number(e.target.value) }))}
-                        className="w-16 text-sm bg-white border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
-                      />
+                      <>
+                        <input
+                          type="number"
+                          value={form.vatRate}
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          onChange={e => setForm(f => ({ ...f, vatRate: Number(e.target.value) }))}
+                          className="w-16 text-sm bg-white border border-gray-200 rounded px-2 py-1 text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+                        />
+                        <span className="text-gray-400">%</span>
+                      </>
                     )}
-                    {form.vatEnabled && <span className="text-gray-400">%</span>}
                   </div>
-                  <span className="font-medium text-gray-700">{formatCurrency(vatAmount, form.currency)}</span>
+                  {form.vatEnabled && (
+                    <span className="font-medium text-gray-700">{formatCurrency(vatAmount, form.currency)}</span>
+                  )}
                 </div>
+
                 <div className="flex justify-between w-full pt-2 border-t border-gray-200">
-                  <span className="font-semibold text-gray-900">Total TTC</span>
+                  <span className="font-semibold text-gray-900">
+                    {form.vatEnabled ? 'Total TTC' : 'Total'}
+                  </span>
                   <span className="font-bold text-xl text-blue-600">{formatCurrency(total, form.currency)}</span>
                 </div>
+
+                {!form.vatEnabled && (
+                  <p className="text-[11px] text-gray-400 w-full text-right -mt-1">
+                    HT = TTC (TVA non applicable)
+                  </p>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Notes */}
+          {/* Notes — user's free field */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
             <label className="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
-              Notes & Conditions de paiement
+              Notes personnalisées
             </label>
             <textarea
               value={form.notes}
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-              placeholder="Conditions de paiement, informations bancaires, mentions légales..."
+              placeholder="Informations bancaires, références commande, conditions spécifiques..."
               rows={3}
               className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
             />
+
+            {/* Fixed legal mentions preview */}
+            <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1.5">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M5 1v4M5 7v1" stroke="#9ca3af" strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="5" cy="5" r="4.25" stroke="#9ca3af" strokeWidth="1" />
+                </svg>
+                Mentions légales — toujours incluses sur la facture
+              </p>
+              <ol className="space-y-1">
+                {LEGAL_MENTIONS_ME.map((m, i) => (
+                  <li key={i} className="text-xs text-gray-400 flex items-start gap-1.5">
+                    <span className="shrink-0 text-gray-300 font-mono">{i + 1}.</span>
+                    {m}
+                  </li>
+                ))}
+              </ol>
+            </div>
           </div>
 
           {/* Bottom actions */}
-          <div className="flex justify-end gap-3 pb-4">
+          <div className="flex flex-wrap justify-end gap-3 pb-4">
             <button onClick={onCancel} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-100 transition-all">
               Annuler
             </button>

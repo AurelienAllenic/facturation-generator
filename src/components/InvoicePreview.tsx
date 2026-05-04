@@ -3,6 +3,7 @@ import {
   calcSubtotal, calcVat, calcTotal,
   formatCurrency, formatDate
 } from '../utils/calculations'
+import { LEGAL_MENTIONS_ME } from '../utils/legalMentions'
 
 interface InvoicePreviewProps {
   invoice: Invoice
@@ -15,6 +16,8 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
   const subtotal = calcSubtotal(invoice.items)
   const vatAmount = calcVat(subtotal, invoice.vatEnabled ? invoice.vatRate : 0)
   const total = calcTotal(subtotal, vatAmount)
+
+  const isME = invoice.isMicroEntrepreneur ?? true
 
   function handlePrint() {
     window.print()
@@ -33,7 +36,6 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
     <div className="animate-fade-in flex-1 overflow-y-auto">
       {/* Toolbar — hidden on print */}
       <div className="no-print sticky top-0 z-10 bg-[#f5f3ef]/95 backdrop-blur border-b border-gray-200 px-4 md:px-8 py-3 flex flex-wrap items-center justify-between gap-y-2">
-        {/* Left: back + title + badge */}
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={onBack}
@@ -52,7 +54,6 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
           </span>
         </div>
 
-        {/* Right: action buttons */}
         <div className="flex items-center gap-1.5 shrink-0">
           {invoice.status !== 'paid' && (
             <button
@@ -67,7 +68,6 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
             className="text-xs sm:text-sm font-medium px-2.5 sm:px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 transition-all"
           >
             <span className="hidden sm:inline">Modifier</span>
-            {/* pencil icon — mobile only */}
             <svg className="sm:hidden" width="15" height="15" viewBox="0 0 15 15" fill="none">
               <path d="M10.5 2.5l2 2L5 12H3v-2l7.5-7.5z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -88,10 +88,10 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
       </div>
 
       {/* Invoice Document */}
-      <div className="py-10 px-8 flex justify-center">
+      <div className="py-10 px-4 sm:px-8 flex justify-center">
         <div className="invoice-preview bg-white w-full max-w-[800px] shadow-xl shadow-black/5 rounded-2xl overflow-hidden border border-gray-100">
-          {/* Invoice header band */}
-          <div className="bg-[#111827] px-10 py-8 flex items-start justify-between">
+          {/* Header band */}
+          <div className="bg-[#111827] px-8 sm:px-10 py-8 flex items-start justify-between">
             <div>
               <h1 className="text-3xl font-serif text-white tracking-tight">FACTURE</h1>
               <p className="text-blue-400 font-mono text-sm mt-1">{invoice.number}</p>
@@ -108,14 +108,19 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
             </div>
           </div>
 
-          <div className="p-10">
+          <div className="p-8 sm:p-10">
             {/* Parties */}
-            <div className="grid grid-cols-2 gap-10 mb-10">
+            <div className="grid grid-cols-2 gap-8 sm:gap-10 mb-10">
+              {/* Emitter */}
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-3">De</p>
-                <p className="font-semibold text-gray-900 text-base">{invoice.emitter.name || '—'}</p>
+                <p className="font-semibold text-gray-900 text-base leading-snug">{invoice.emitter.name || '—'}</p>
+                {/* Rule 1 — Micro-entrepreneur mention */}
+                {isME && (
+                  <p className="text-xs text-blue-600 font-medium mt-0.5">Micro-entrepreneur</p>
+                )}
                 {invoice.emitter.siret && (
-                  <p className="text-xs text-gray-400 mt-0.5">SIRET : {invoice.emitter.siret}</p>
+                  <p className="text-xs text-gray-400 mt-1">SIRET : {invoice.emitter.siret}</p>
                 )}
                 <div className="mt-2 space-y-0.5 text-sm text-gray-500">
                   {invoice.emitter.address && <p>{invoice.emitter.address}</p>}
@@ -128,6 +133,7 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
                 </div>
               </div>
 
+              {/* Client */}
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-3">Facturé à</p>
                 <p className="font-semibold text-gray-900 text-base">{invoice.client.name || '—'}</p>
@@ -154,7 +160,10 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
                     <th className="text-left text-xs font-semibold uppercase tracking-wider text-gray-700 pb-3">Description</th>
                     <th className="text-center text-xs font-semibold uppercase tracking-wider text-gray-700 pb-3 w-20">Qté</th>
                     <th className="text-right text-xs font-semibold uppercase tracking-wider text-gray-700 pb-3 w-28">Prix unitaire</th>
-                    <th className="text-right text-xs font-semibold uppercase tracking-wider text-gray-700 pb-3 w-28">Total HT</th>
+                    <th className="text-right text-xs font-semibold uppercase tracking-wider text-gray-700 pb-3 w-28">
+                      {/* Rule 5 — label changes when no TVA */}
+                      {invoice.vatEnabled ? 'Total HT' : 'Montant'}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -172,41 +181,57 @@ export default function InvoicePreview({ invoice, onEdit, onBack, onMarkPaid }: 
               </table>
             </div>
 
-            {/* Totals */}
+            {/* Totals — Rule 5 */}
             <div className="flex justify-end">
               <div className="w-64">
-                <div className="flex justify-between text-sm text-gray-500 py-2 border-b border-gray-100">
-                  <span>Sous-total HT</span>
-                  <span>{formatCurrency(subtotal, invoice.currency)}</span>
-                </div>
-                {invoice.vatEnabled && (
-                  <div className="flex justify-between text-sm text-gray-500 py-2 border-b border-gray-100">
-                    <span>TVA ({invoice.vatRate}%)</span>
-                    <span>{formatCurrency(vatAmount, invoice.currency)}</span>
+                {invoice.vatEnabled ? (
+                  <>
+                    <div className="flex justify-between text-sm text-gray-500 py-2 border-b border-gray-100">
+                      <span>Sous-total HT</span>
+                      <span>{formatCurrency(subtotal, invoice.currency)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-500 py-2 border-b border-gray-100">
+                      <span>TVA ({invoice.vatRate}%)</span>
+                      <span>{formatCurrency(vatAmount, invoice.currency)}</span>
+                    </div>
+                    <div className="flex justify-between py-3 mt-1">
+                      <span className="font-bold text-gray-900">Total TTC</span>
+                      <span className="font-bold text-xl text-blue-600">{formatCurrency(total, invoice.currency)}</span>
+                    </div>
+                  </>
+                ) : (
+                  /* No TVA: HT = TTC, single line */
+                  <div className="flex justify-between py-3 border-t-2 border-gray-900">
+                    <span className="font-bold text-gray-900">Total</span>
+                    <span className="font-bold text-xl text-blue-600">{formatCurrency(subtotal, invoice.currency)}</span>
                   </div>
                 )}
-                <div className="flex justify-between py-3 mt-1">
-                  <span className="font-bold text-gray-900">Total TTC</span>
-                  <span className="font-bold text-xl text-blue-600">{formatCurrency(total, invoice.currency)}</span>
-                </div>
               </div>
             </div>
 
-            {/* Notes */}
-            {(invoice.notes || !invoice.vatEnabled) && (
+            {/* User notes */}
+            {invoice.notes && (
               <div className="mt-10 pt-6 border-t border-gray-100">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">Notes & Conditions</p>
-                {invoice.notes && (
-                  <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">{invoice.notes}</p>
-                )}
-                {!invoice.vatEnabled && !invoice.notes?.includes('TVA non applicable') && (
-                  <p className="text-sm text-gray-500 mt-1">TVA non applicable, art. 293 B du CGI</p>
-                )}
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">Notes</p>
+                <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">{invoice.notes}</p>
               </div>
             )}
 
+            {/* Rule 2 — Fixed legal mentions, always present */}
+            <div className="mt-6 pt-5 border-t border-gray-100">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">Mentions légales</p>
+              <ol className="space-y-1">
+                {LEGAL_MENTIONS_ME.map((mention, i) => (
+                  <li key={i} className="text-xs text-gray-500 flex items-start gap-2">
+                    <span className="shrink-0 text-gray-300 font-mono mt-px">{i + 1}.</span>
+                    {mention}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
             {/* Footer */}
-            <div className="mt-12 pt-6 border-t border-gray-100 flex items-center justify-between">
+            <div className="mt-10 pt-5 border-t border-gray-100 flex items-center justify-between">
               <p className="text-[10px] text-gray-300">Généré via FacturaPro</p>
               <p className="text-[10px] text-gray-300 font-mono">{invoice.number} · {formatDate(invoice.date)}</p>
             </div>

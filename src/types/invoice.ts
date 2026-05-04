@@ -26,6 +26,7 @@ export interface Invoice {
   items: InvoiceItem[]
   vatRate: number
   vatEnabled: boolean
+  isMicroEntrepreneur: boolean
   notes: string
   currency: string
   status: 'draft' | 'sent' | 'paid'
