@@ -15,7 +15,8 @@ interface InvoiceFormProps {
 }
 
 const EMPTY_PARTY: InvoiceParty = {
-  name: '', address: '', city: '', postalCode: '', country: 'France', email: '', phone: '', siret: '',
+  name: '', address: '', city: '', postalCode: '', country: 'France',
+  countryCode: 'FR', email: '', phone: '', siret: '', vatNumber: '',
 }
 
 const EMPTY_ITEM: () => InvoiceItem = () => ({
@@ -82,6 +83,8 @@ function PartyFields({ label, party, isEmitter, isMicroEntrepreneur, onChange }:
         <Field label="Code postal" value={party.postalCode} onChange={f('postalCode')} />
         <Field label="Ville" value={party.city} onChange={f('city')} />
         <Field label="Pays" value={party.country} onChange={f('country')} />
+        {/* Code pays ISO structuré — requis par Factur-X (FR, BE, DE…) */}
+        <Field label="Code pays (ISO)" value={party.countryCode ?? 'FR'} onChange={f('countryCode')} />
         {/* SIRET with quick-fill */}
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1.5">SIRET</label>
@@ -102,6 +105,8 @@ function PartyFields({ label, party, isEmitter, isMicroEntrepreneur, onChange }:
             </button>
           )}
         </div>
+        {/* N° de TVA intracommunautaire — vide pour un micro en franchise */}
+        <Field label="N° TVA intracom." value={party.vatNumber ?? ''} onChange={f('vatNumber')} />
         <Field label="Email" value={party.email} onChange={f('email')} type="email" />
         <Field label="Téléphone" value={party.phone} onChange={f('phone')} className="col-span-2" />
       </div>
@@ -282,6 +287,45 @@ export default function InvoiceForm({ invoice, existingNumbers, onSave, onPrevie
                 <span className="text-sm font-medium text-gray-700">Micro-entrepreneur</span>
               </label>
               <span className="text-xs text-gray-400">Affiche le statut sur la facture et applique les mentions légales obligatoires</span>
+            </div>
+          </div>
+
+          {/* Champs réglementaires Factur-X */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-4">
+              Champs réglementaires (Factur-X)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  Référence acheteur (n° commande / engagement)
+                </label>
+                <input
+                  type="text"
+                  value={form.buyerReference ?? ''}
+                  onChange={e => setForm(f => ({ ...f, buyerReference: e.target.value }))}
+                  placeholder="ex: BC-2026-0042 (obligatoire pour le secteur public)"
+                  className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  Motif d'exonération de TVA
+                </label>
+                <input
+                  type="text"
+                  value={form.vatExemptionReason ?? ''}
+                  onChange={e => setForm(f => ({ ...f, vatExemptionReason: e.target.value }))}
+                  placeholder={LEGAL_MENTIONS_ME[0]}
+                  disabled={form.vatEnabled}
+                  className="w-full text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-gray-800 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {form.vatEnabled
+                    ? 'TVA active : aucun motif d\'exonération requis.'
+                    : 'Vide → la mention micro (293 B) est utilisée par défaut dans le XML.'}
+                </p>
+              </div>
             </div>
           </div>
 
